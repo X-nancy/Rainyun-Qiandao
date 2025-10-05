@@ -21,9 +21,29 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 # 修改init_selenium函数，修复linux变量作用域问题
 # 在文件开头导入webdriver-manager
-from webdriver_manager.chrome import ChromeDriverManager
+# 修改这两行导入语句
+# from webdriver_manager.chrome import ChromeDriverManager
+# from webdriver_manager.core.utils import ChromeType
 
-# 修改init_selenium函数
+# 修改为正确的导入方式
+try:
+    from webdriver_manager.chrome import ChromeDriverManager
+    # 尝试不同的ChromeType导入路径
+    try:
+        from webdriver_manager.core.utils import ChromeType
+    except ImportError:
+        try:
+            from webdriver_manager.chrome import ChromeType
+        except ImportError:
+            # 如果找不到ChromeType，设置为None
+            ChromeType = None
+except ImportError:
+    print("webdriver_manager未安装，将使用备用方式")
+    ChromeDriverManager = None
+    ChromeType = None
+import subprocess
+import sys
+
 def init_selenium(debug=False, headless=False):
     ops = webdriver.ChromeOptions()
     
@@ -44,14 +64,74 @@ def init_selenium(debug=False, headless=False):
     if debug and not is_github_actions:
         ops.add_experimental_option("detach", True)
     
+    # 尝试不同的ChromeDriver使用策略
+    # 策略1: 直接使用系统路径中的ChromeDriver（最简单可靠）
     try:
-        # 尝试使用webdriver-manager自动管理ChromeDriver
-        service = Service(ChromeDriverManager().install())
-        return webdriver.Chrome(service=service, options=ops)
+        print("尝试直接使用系统ChromeDriver...")
+        # 不指定service，让Selenium自动查找系统路径中的ChromeDriver
+        driver = webdriver.Chrome(options=ops)
+        print("成功使用系统ChromeDriver")
+        return driver
     except Exception as e:
-        print(f"使用webdriver-manager失败，尝试直接使用系统ChromeDriver: {e}")
-        # 备用方案：尝试直接使用系统路径中的ChromeDriver
-        return webdriver.Chrome(options=ops)
+        print(f"系统ChromeDriver失败: {e}")
+    
+    # 策略2: 优化webdriver-manager的使用方式
+    try:
+        print("尝试使用webdriver-manager...")
+        if ChromeDriverManager:
+            # 仅当ChromeType可用时才指定chrome_type参数
+            if ChromeType and hasattr(ChromeType, 'GOOGLE'):
+                manager = ChromeDriverManager(chrome_type=ChromeType.GOOGLE)
+            else:
+                # 在新版本中，可能不再需要指定ChromeType
+                manager = ChromeDriverManager()
+            
+            # 获取驱动路径但不自动安装
+            driver_path = manager.install()
+            print(f"获取到ChromeDriver路径: {driver_path}")
+            # 手动创建service并指定正确的驱动路径
+            service = Service(driver_path)
+            driver = webdriver.Chrome(service=service, options=ops)
+            print("成功使用webdriver-manager")
+            return driver
+        else:
+            raise ImportError("webdriver_manager未安装")
+    except Exception as e:
+        print(f"webdriver-manager失败: {e}")
+    
+    # 策略3: 作为最后的备用，尝试使用固定路径
+    try:
+        print("尝试使用备用ChromeDriver路径...")
+        # 尝试常见的ChromeDriver路径
+        common_paths = ['/usr/local/bin/chromedriver', '/usr/bin/chromedriver', './chromedriver', 'chromedriver']
+        for path in common_paths:
+            try:
+                service = Service(path)
+                driver = webdriver.Chrome(service=service, options=ops)
+                print(f"成功使用备用路径: {path}")
+                return driver
+            except:
+                continue
+    except Exception as e:
+        print(f"备用路径失败: {e}")
+    
+    # 所有策略都失败时的错误处理
+    print("错误: 无法初始化ChromeDriver，请检查Chrome和ChromeDriver的安装")
+    # 在GitHub Actions环境中，尝试安装ChromeDriver的备用方法
+    if is_github_actions:
+        print("在GitHub Actions环境中，尝试安装ChromeDriver...")
+        try:
+            # 使用npm的chromedriver包作为备用
+            subprocess.run([sys.executable, '-m', 'pip', 'install', 'chromedriver-binary-auto'])
+            import chromedriver_binary  # 这个包会自动设置路径
+            driver = webdriver.Chrome(options=ops)
+            print("成功使用chromedriver-binary-auto")
+            return driver
+        except Exception as e:
+            print(f"备用安装失败: {e}")
+    
+    # 彻底失败
+    raise Exception("无法初始化Selenium WebDriver")
 
 def download_image(url, filename):
     os.makedirs("temp", exist_ok=True)
