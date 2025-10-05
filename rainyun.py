@@ -18,6 +18,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 
+# 修改init_selenium函数，修复linux变量作用域问题
 def init_selenium(debug=False, headless=False):
     ops = webdriver.ChromeOptions()
     
@@ -34,6 +35,7 @@ def init_selenium(debug=False, headless=False):
     
     # 环境变量判断是否在GitHub Actions中运行
     is_github_actions = os.environ.get("GITHUB_ACTIONS", "false") == "true"
+    linux = is_github_actions
     
     if debug and not is_github_actions:
         ops.add_experimental_option("detach", True)
@@ -44,10 +46,11 @@ def init_selenium(debug=False, headless=False):
     else:
         return webdriver.Chrome(service=Service("chromedriver.exe"), options=ops)
 
-
+# 修改download_image函数，添加proxies参数禁用代理
 def download_image(url, filename):
     os.makedirs("temp", exist_ok=True)
-    response = requests.get(url, timeout=10)
+    # 禁用代理以避免连接问题
+    response = requests.get(url, timeout=10, proxies={"http": None, "https": None})
     if response.status_code == 200:
         path = os.path.join("temp", filename)
         with open(path, "wb") as f:
@@ -194,7 +197,7 @@ def compute_similarity(img1_path, img2_path):
     return similarity, len(good)
 
 
-# 在main函数中，添加从环境变量读取敏感信息的支持
+# 修改main函数，移除重复的变量定义
 if __name__ == "__main__":
     # 连接超时等待
     timeout = 15
@@ -203,11 +206,23 @@ if __name__ == "__main__":
     # 从环境变量读取用户名密码，如果没有则使用默认值
     user = os.environ.get("RAINYUN_USER")
     pwd = os.environ.get("RAINYUN_PASS")
-    # 调试模式
-    debug = False
+    # 环境变量判断是否在GitHub Actions中运行
+    is_github_actions = os.environ.get("GITHUB_ACTIONS", "false") == "true"
+    # 从环境变量读取模式设置
+    debug = os.environ.get('DEBUG', 'false').lower() == 'true'
+    headless = os.environ.get('HEADLESS', 'false').lower() == 'true'
     # Linux 模式 - GitHub Actions上默认为True
-    linux = os.environ.get("GITHUB_ACTIONS", "false") == "true"
-
+    linux = is_github_actions
+    
+    # 如果在GitHub Actions环境中，强制使用无头模式
+    if is_github_actions:
+        headless = True
+    
+    # 确保有用户名和密码
+    if not user or not pwd:
+        print("错误: 未设置用户名或密码，请在环境变量中设置RAINYUN_USER和RAINYUN_PASS")
+        exit(1)
+    
     # 以下为代码执行区域，请勿修改！
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     logger = logging.getLogger(__name__)
