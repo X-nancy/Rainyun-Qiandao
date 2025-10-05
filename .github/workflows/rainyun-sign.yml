@@ -21,26 +21,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
-      - name: 安装Chrome和ChromeDriver
+      - name: 安装Chrome和ChromeDriver (简化版)
         run: |
           sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-          # 打印Chrome版本信息
-          google-chrome --version
-          # 安装匹配版本的ChromeDriver
-          CHROME_VERSION=$(google-chrome --version | grep -oP '\\d+\\.\\d+\\.\\d+\\.\\d+')
-          echo "Chrome版本: $CHROME_VERSION"
-          CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d. -f1)
-          echo "Chrome主版本: $CHROME_MAJOR_VERSION"
-          # 尝试获取匹配的ChromeDriver版本
-          CHROMEDRIVER_VERSION=$(curl -s https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION%.*} || curl -s https://chromedriver.storage.googleapis.com/LATEST_RELEASE)
-          echo "ChromeDriver版本: $CHROMEDRIVER_VERSION"
-          # 下载并安装ChromeDriver
-          wget -q -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip
-          sudo unzip -o /tmp/chromedriver.zip -d /usr/local/bin/
-          sudo chmod +x /usr/local/bin/chromedriver
-          # 验证ChromeDriver安装
-          chromedriver --version
+          sudo apt-get install -y google-chrome-stable curl unzip
+          # 使用webdriver-manager自动管理ChromeDriver版本
+          pip install webdriver-manager
       
       - name: 确保temp目录存在
         run: mkdir -p temp
@@ -55,7 +41,9 @@ jobs:
           HEADLESS: "true"
           # 启用调试日志
           DEBUG: "false"
-          
+          # 确保使用系统路径中的ChromeDriver
+          CHROMEDRIVER_PATH: "chromedriver"
+      
       - name: 清理临时文件
         run: rm -rf temp
         if: always()  # 即使前面步骤失败也执行清理

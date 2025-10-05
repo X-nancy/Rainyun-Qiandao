@@ -16,14 +16,19 @@ from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from webdriver_manager.chrome import ChromeDriverManager
 
 
 # 修改init_selenium函数，修复linux变量作用域问题
+# 在文件开头导入webdriver-manager
+from webdriver_manager.chrome import ChromeDriverManager
+
+# 修改init_selenium函数
 def init_selenium(debug=False, headless=False):
     ops = webdriver.ChromeOptions()
     
-    # 根据 headless 参数决定是否添加无头模式选项
-    if headless:
+    # 无论什么环境都添加无头模式选项
+    if headless or os.environ.get("GITHUB_ACTIONS", "false") == "true":
         for option in ['--headless', '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']:
             ops.add_argument(option)
     
@@ -35,29 +40,34 @@ def init_selenium(debug=False, headless=False):
     
     # 环境变量判断是否在GitHub Actions中运行
     is_github_actions = os.environ.get("GITHUB_ACTIONS", "false") == "true"
-    linux = is_github_actions
     
     if debug and not is_github_actions:
         ops.add_experimental_option("detach", True)
     
-    # 在GitHub Actions中使用系统安装的ChromeDriver
-    if is_github_actions or linux:
-        return webdriver.Chrome(options=ops)  # 自动查找系统路径中的ChromeDriver
-    else:
-        return webdriver.Chrome(service=Service("chromedriver.exe"), options=ops)
+    try:
+        # 尝试使用webdriver-manager自动管理ChromeDriver
+        service = Service(ChromeDriverManager().install())
+        return webdriver.Chrome(service=service, options=ops)
+    except Exception as e:
+        print(f"使用webdriver-manager失败，尝试直接使用系统ChromeDriver: {e}")
+        # 备用方案：尝试直接使用系统路径中的ChromeDriver
+        return webdriver.Chrome(options=ops)
 
-# 修改download_image函数，添加proxies参数禁用代理
 def download_image(url, filename):
     os.makedirs("temp", exist_ok=True)
-    # 禁用代理以避免连接问题
-    response = requests.get(url, timeout=10, proxies={"http": None, "https": None})
-    if response.status_code == 200:
-        path = os.path.join("temp", filename)
-        with open(path, "wb") as f:
-            f.write(response.content)
-        return True
-    else:
-        logger.error("下载图片失败！")
+    try:
+        # 禁用代理以避免连接问题
+        response = requests.get(url, timeout=10, proxies={"http": None, "https": None}, verify=False)
+        if response.status_code == 200:
+            path = os.path.join("temp", filename)
+            with open(path, "wb") as f:
+                f.write(response.content)
+            return True
+        else:
+            logger.error(f"下载图片失败！状态码: {response.status_code}")
+            return False
+    except Exception as e:
+        logger.error(f"下载图片异常: {str(e)}")
         return False
 
 
@@ -203,27 +213,26 @@ if __name__ == "__main__":
     timeout = 15
     # 最大随机等待延时
     max_delay = 0
-    # 从环境变量读取用户名密码，如果没有则使用默认值
+    # 从环境变量读取用户名密码
     user = os.environ.get("RAINYUN_USER")
     pwd = os.environ.get("RAINYUN_PASS")
-    # 环境变量判断是否在GitHub Actions中运行
-    is_github_actions = os.environ.get("GITHUB_ACTIONS", "false") == "true"
-    # 从环境变量读取模式设置
-    debug = os.environ.get('DEBUG', 'false').lower() == 'true'
-    headless = os.environ.get('HEADLESS', 'false').lower() == 'true'
-    # Linux 模式 - GitHub Actions上默认为True
-    linux = is_github_actions
-    
-    # 如果在GitHub Actions环境中，强制使用无头模式
-    if is_github_actions:
-        headless = True
     
     # 确保有用户名和密码
     if not user or not pwd:
         print("错误: 未设置用户名或密码，请在环境变量中设置RAINYUN_USER和RAINYUN_PASS")
         exit(1)
     
-    # 以下为代码执行区域，请勿修改！
+    # 环境变量判断是否在GitHub Actions中运行
+    is_github_actions = os.environ.get("GITHUB_ACTIONS", "false") == "true"
+    # 从环境变量读取模式设置
+    debug = os.environ.get('DEBUG', 'false').lower() == 'true'
+    headless = os.environ.get('HEADLESS', 'false').lower() == 'true'
+    
+    # 如果在GitHub Actions环境中，强制使用无头模式
+    if is_github_actions:
+        headless = True
+    
+    # 以下代码保持不变...
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     logger = logging.getLogger(__name__)
     ver = "2.2"
