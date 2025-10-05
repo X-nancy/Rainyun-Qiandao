@@ -1,0 +1,45 @@
+name: Rainyun 自动签到
+
+on:
+  # 每天早上8点运行
+  schedule:
+    - cron: '0 0 * * *'
+  # 也可以手动触发
+  workflow_dispatch:
+
+jobs:
+  sign-in:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: 设置Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: 安装Chrome和ChromeDriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+          # 安装匹配版本的ChromeDriver
+          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+')
+          CHROMEDRIVER_VERSION=$(curl -s https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION%.*})
+          wget -q -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip
+          sudo unzip -o /tmp/chromedriver.zip -d /usr/local/bin/
+          sudo chmod +x /usr/local/bin/chromedriver
+      
+      - name: 执行签到脚本
+        run: python rainyun.py
+        env:
+          # 请在GitHub仓库的Settings > Secrets and variables > Actions中设置这些密钥
+          RAINYUN_USER: ${{ secrets.RAINYUN_USER }}
+          RAINYUN_PASS: ${{ secrets.RAINYUN_PASS }}
+          
+      - name: 清理临时文件
+        run: rm -rf temp
