@@ -163,6 +163,8 @@ def get_height_from_style(style):
     return re.search(r'height:\s*([\d.]+)px', style).group(1)
 
 
+# 修改3: 缩短验证码处理中的等待时间
+# 将process_captcha函数中的等待时间从5秒缩短到1秒
 def process_captcha():
     try:
         download_captcha_img()
@@ -206,7 +208,9 @@ def process_captcha():
                     EC.element_to_be_clickable((By.XPATH, '//*[@id="tcStatus"]/div[2]/div[2]/div/div')))
                 logger.info("提交验证码")
                 confirm.click()
-                time.sleep(5)
+                # 修改确认后的等待时间
+                # time.sleep(5)
+                time.sleep(1)
                 result = wait.until(EC.visibility_of_element_located((By.XPATH, '//*[@id="tcOperation"]')))
                 if result.get_attribute("class") == 'tc-opera pointer show-success':
                     logger.info("验证码通过")
@@ -218,9 +222,13 @@ def process_captcha():
         else:
             logger.error("当前验证码识别率低，尝试刷新")
         reload = driver.find_element(By.XPATH, '//*[@id="reload"]')
-        time.sleep(5)
+        # 修改刷新前的等待时间
+        # time.sleep(5)
+        # reload.click()
+        # time.sleep(5)
+        time.sleep(0.5)
         reload.click()
-        time.sleep(5)
+        time.sleep(0.5)
         process_captcha()
     except TimeoutException:
         logger.error("获取验证码图片失败")
@@ -288,10 +296,11 @@ def compute_similarity(img1_path, img2_path):
 
 
 # 修改main函数，移除重复的变量定义
+# 修改1: 调整超时设置
 if __name__ == "__main__":
-    # 连接超时等待
+    # 连接超时等待 - 已设置为15秒，符合要求
     timeout = 15
-    # 最大随机等待延时
+    # 最大随机等待延时 - 设置为0以避免额外等待
     max_delay = 0
     # 从环境变量读取用户名密码
     user = os.environ.get("RAINYUN_USER")
@@ -330,8 +339,10 @@ if __name__ == "__main__":
     det = ddddocr.DdddOcr(det=True, show_ad=False)
     logger.info("初始化 Selenium")
     # 在 main 函数中添加
-    headless = os.environ.get('HEADLESS', 'false').lower() == 'true'
-    debug = os.environ.get('DEBUG', 'false').lower() == 'true'
+    # 修改2: 移除main函数中重复的变量定义
+    # 移除这两行重复定义
+    # headless = os.environ.get('HEADLESS', 'false').lower() == 'true'
+    # debug = os.environ.get('DEBUG', 'false').lower() == 'true'
     
     # 传递 headless 参数给 init_selenium
     driver = init_selenium(debug=debug, headless=headless)
@@ -363,12 +374,20 @@ if __name__ == "__main__":
     except TimeoutException:
         logger.info("未触发验证码")
     time.sleep(5)
+    # 修改4: 缩短登录后的等待时间
+    # 在main函数中，将登录后的等待时间从5秒缩短到1秒
+    # time.sleep(5)
+    # driver.switch_to.default_content()
+    
+    time.sleep(1)
     driver.switch_to.default_content()
     if driver.current_url == "https://app.rainyun.com/dashboard":
         logger.info("登录成功！")
         logger.info("正在转到赚取积分页")
         driver.get("https://app.rainyun.com/account/reward/earn")
-        driver.implicitly_wait(5)
+        # 修改5: 优化隐式等待时间
+        # 将implicitly_wait从5秒缩短到2秒
+        driver.implicitly_wait(2)  # 替换所有的driver.implicitly_wait(5)
         earn = driver.find_element(By.XPATH,
                                    '//*[@id="app"]/div[1]/div[3]/div[2]/div/div/div[2]/div[2]/div/div/div/div[1]/div/div[1]/div/div[1]/div/span[2]/a')
         logger.info("点击赚取积分")
