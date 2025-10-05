@@ -18,16 +18,19 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 
-def init_selenium() -> WebDriver:
-    ops = Options()
-    # 添加必要的无头模式参数
-    ops.add_argument("--headless")
-    ops.add_argument("--no-sandbox")
-    ops.add_argument("--disable-gpu")
-    ops.add_argument("--disable-dev-shm-usage")
-    ops.add_argument("--no-proxy-server")
-    ops.add_argument("--lang=zh-CN")
-    ops.add_argument("--window-size=1920,1080")
+def init_selenium(debug=False, headless=False):
+    ops = webdriver.ChromeOptions()
+    
+    # 根据 headless 参数决定是否添加无头模式选项
+    if headless:
+        for option in ['--headless', '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']:
+            ops.add_argument(option)
+    
+    # 添加通用选项
+    ops.add_argument('--window-size=1920,1080')
+    ops.add_argument('--disable-blink-features=AutomationControlled')
+    ops.add_argument('--no-proxy-server')
+    ops.add_argument('--lang=zh-CN')
     
     # 环境变量判断是否在GitHub Actions中运行
     is_github_actions = os.environ.get("GITHUB_ACTIONS", "false") == "true"
@@ -222,7 +225,12 @@ if __name__ == "__main__":
     ocr = ddddocr.DdddOcr(ocr=True, show_ad=False)
     det = ddddocr.DdddOcr(det=True, show_ad=False)
     logger.info("初始化 Selenium")
-    driver = init_selenium()
+    # 在 main 函数中添加
+    headless = os.environ.get('HEADLESS', 'false').lower() == 'true'
+    debug = os.environ.get('DEBUG', 'false').lower() == 'true'
+    
+    # 传递 headless 参数给 init_selenium
+    driver = init_selenium(debug=debug, headless=headless)
     # 过 Selenium 检测
     with open("stealth.min.js", mode="r") as f:
         js = f.read()
