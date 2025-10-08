@@ -321,7 +321,7 @@ if __name__ == "__main__":
     logger.info("------------------------------------------------------------------")
     
     if not debug:
-        delay_sec = random.randint(5, 20)
+        delay_sec = random.randint(360, 1800)
         logger.info(f"随机延时等待 {delay_sec} 秒")
         time.sleep(delay_sec)
     logger.info("初始化 ddddocr")
