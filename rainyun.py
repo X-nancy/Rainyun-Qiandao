@@ -465,17 +465,50 @@ if __name__ == "__main__":
     logger.info("发起登录请求")
     driver.get("https://app.rainyun.com/auth/login")
     wait = WebDriverWait(driver, timeout)
-    try:
-        username = wait.until(EC.visibility_of_element_located((By.NAME, 'login-field')))
-        password = wait.until(EC.visibility_of_element_located((By.NAME, 'login-password')))
-        login_button = wait.until(EC.visibility_of_element_located((By.XPATH,
+    # 改进的登录逻辑，添加重试机制
+    max_retries = 3
+    retry_count = 0
+    login_success = False
+    
+    while retry_count < max_retries and not login_success:
+        try:
+            # 使用更可靠的定位方式
+            username = wait.until(EC.visibility_of_element_located((By.NAME, 'login-field')))
+            password = wait.until(EC.visibility_of_element_located((By.NAME, 'login-password')))
+            
+            # 尝试多种方式定位登录按钮
+            try:
+                login_button = wait.until(EC.element_to_be_clickable((By.XPATH,
                                                                     '//*[@id="app"]/div[1]/div[1]/div/div[2]/fade/div/div/span/form/button')))
-        username.send_keys(user)
-        password.send_keys(pwd)
-        login_button.click()
-    except TimeoutException:
-        logger.error("页面加载超时，请尝试延长超时时间或切换到国内网络环境！")
-        exit()
+            except:
+                try:
+                    login_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[type="submit"]')))
+                except:
+                    login_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//button[contains(text(), "登录")]')))
+            
+            # 清除可能存在的输入
+            username.clear()
+            password.clear()
+            
+            # 添加输入延迟，模拟真实用户
+            username.send_keys(user)
+            time.sleep(0.5)
+            password.send_keys(pwd)
+            time.sleep(0.5)
+            
+            # 使用JavaScript点击，避免元素遮挡问题
+            driver.execute_script("arguments[0].click();", login_button)
+            logger.info(f"登录尝试 {retry_count + 1}/{max_retries}")
+            login_success = True
+        except TimeoutException:
+            retry_count += 1
+            if retry_count < max_retries:
+                logger.warning(f"登录失败，{retry_count}秒后重试...")
+                time.sleep(retry_count)
+                driver.refresh()
+            else:
+                logger.error("页面加载超时，请尝试延长超时时间或切换到国内网络环境！")
+                exit()
     try:
         login_captcha = wait.until(EC.visibility_of_element_located((By.ID, 'tcaptcha_iframe_dy')))
         logger.warning("触发验证码！")
@@ -485,19 +518,68 @@ if __name__ == "__main__":
         logger.info("未触发验证码")
     time.sleep(5)
     driver.switch_to.default_content()
-    if driver.current_url == "https://app.rainyun.com/dashboard":
+    # 验证登录状态并处理赚取积分
+    if "dashboard" in driver.current_url:
         logger.info("登录成功！")
         logger.info("正在转到赚取积分页")
-        driver.get("https://app.rainyun.com/account/reward/earn")
-        driver.implicitly_wait(5)
-        earn = driver.find_element(By.XPATH,
-                                   '//*[@id="app"]/div[1]/div[3]/div[2]/div/div/div[2]/div[2]/div/div/div/div[1]/div/div[1]/div/div[1]/div/span[2]/a')
-        logger.info("点击赚取积分")
-        earn.click()
-        logger.info("处理验证码")
-        driver.switch_to.frame("tcaptcha_iframe_dy")
-        process_captcha()
-        driver.switch_to.default_content()
+        
+        # 尝试多次访问赚取积分页面
+        for _ in range(3):
+            try:
+                driver.get("https://app.rainyun.com/account/reward/earn")
+                logger.info("等待赚取积分页面加载...")
+                # 等待页面加载完成
+                wait.until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
+                time.sleep(3)  # 额外等待确保页面完全渲染
+                
+                # 使用多种策略查找赚取积分按钮
+                earn = None
+                strategies = [
+                    (By.XPATH, '//*[@id="app"]/div[1]/div[3]/div[2]/div/div/div[2]/div[2]/div/div/div/div[1]/div/div[1]/div/div[1]/div/span[2]/a'),
+                    (By.XPATH, '//a[contains(@href, "earn") and contains(text(), "赚取")]'),
+                    (By.CSS_SELECTOR, 'a[href*="earn"]'),
+                    (By.XPATH, '//a[contains(@class, "earn")]')
+                ]
+                
+                for by, selector in strategies:
+                    try:
+                        earn = wait.until(EC.element_to_be_clickable((by, selector)))
+                        logger.info(f"使用策略 {by}={selector} 找到赚取积分按钮")
+                        break
+                    except:
+                        logger.debug(f"策略 {by}={selector} 未找到按钮，尝试下一种")
+                        continue
+                
+                if earn:
+                    # 滚动到元素位置
+                    driver.execute_script("arguments[0].scrollIntoView(true);", earn)
+                    time.sleep(1)
+                    # 使用JavaScript点击
+                    logger.info("点击赚取积分")
+                    driver.execute_script("arguments[0].click();", earn)
+                    
+                    # 处理可能出现的验证码
+                    try:
+                        logger.info("检查是否需要验证码")
+                        wait.until(EC.frame_to_be_available_and_switch_to_it((By.ID, "tcaptcha_iframe_dy")))
+                        logger.info("处理验证码")
+                        process_captcha()
+                        driver.switch_to.default_content()
+                    except:
+                        logger.info("未触发验证码或验证码框架加载失败")
+                        driver.switch_to.default_content()
+                    
+                    logger.info("赚取积分操作完成")
+                    break
+                else:
+                    logger.warning("未找到赚取积分按钮，刷新页面重试...")
+                    driver.refresh()
+                    time.sleep(3)
+            except Exception as e:
+                logger.error(f"访问赚取积分页面时出错: {e}")
+                time.sleep(3)
+        else:
+            logger.error("多次尝试后仍无法找到赚取积分按钮")
         driver.implicitly_wait(5)
         points_raw = driver.find_element(By.XPATH,
                                          '//*[@id="app"]/div[1]/div[3]/div[2]/div/div/div[2]/div[1]/div[1]/div/p/div/h3').get_attribute(
