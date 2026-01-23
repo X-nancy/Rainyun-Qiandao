@@ -297,7 +297,7 @@ def sign_in_account(user, pwd, debug=False, headless=False):
         logger.info(f"开始处理账户: {user}")
         if not debug:
             logger.info(f"当前时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            delay_sec = random.randint(1200,7200)
+            delay_sec = random.randint(3200,9600)
             logger.info(f"随机延时等待 {delay_sec/60:.0f} 分{delay_sec%60:.0f}秒")
         
         logger.info("初始化 ddddocr")
